@@ -53,30 +53,11 @@ jobs:
         run: |
           pyinstaller --onefile --windowed --name TaskTimer main_cloud.py
 
-      - name: Create AppImage
-        run: |
-          mkdir -p TaskTimer.AppDir/usr/bin
-          mkdir -p TaskTimer.AppDir/usr/share/applications
-          mkdir -p TaskTimer.AppDir/usr/share/icons/hicolor/256x256/apps
-          cp dist/TaskTimer TaskTimer.AppDir/usr/bin/
-          cat > TaskTimer.AppDir/usr/share/applications/tasktimer.desktop <<EOF
-          [Desktop Entry]
-          Type=Application
-          Name=TaskTimer
-          Comment=Task-Based Intelligent Time Tracking
-          Exec=TaskTimer
-          Icon=tasktimer
-          Categories=Utility;
-          EOF
-          wget https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
-          chmod +x appimagetool-x86_64.AppImage
-          ./appimagetool-x86_64.AppImage TaskTimer.AppDir TaskTimer-x86_64.AppImage
-
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: TaskTimer-Linux
-          path: TaskTimer-x86_64.AppImage
+          path: dist/TaskTimer
 
   build-macos:
     runs-on: macos-latest
@@ -126,7 +107,7 @@ jobs:
         with:
           files: |
             artifacts/TaskTimer-Windows/TaskTimer.exe
-            artifacts/TaskTimer-Linux/TaskTimer-x86_64.AppImage
+            artifacts/TaskTimer-Linux/TaskTimer
             artifacts/TaskTimer-macOS/TaskTimer.dmg
           draft: false
           prerelease: false
