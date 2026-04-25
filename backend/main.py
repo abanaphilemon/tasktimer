@@ -222,6 +222,13 @@ async def get_task_app_summary(task_id: str, current_user = Depends(get_current_
     return app_summary
 
 
+@app.get("/api/tasks/{task_id}/sessions")
+async def get_task_sessions(task_id: str, current_user = Depends(get_current_user)):
+    """Get completed sessions for a task."""
+    sessions = await db.get_task_sessions(task_id)
+    return sessions
+
+
 @app.post("/api/tasks/{task_id}/generate-share-link")
 async def generate_share_link(task_id: str, current_user = Depends(get_current_user)):
     """Generate a share link for an existing task."""

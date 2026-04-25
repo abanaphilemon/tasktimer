@@ -139,6 +139,16 @@ class TaskTimerAPIClient:
         response.raise_for_status()
         return response.json()
 
+    def get_task_sessions(self, task_id: str) -> List[Dict[str, Any]]:
+        """Get completed sessions for a task."""
+        response = requests.get(
+            f"{self.base_url}/api/tasks/{task_id}/sessions",
+            headers=self._get_headers(),
+            timeout=self.timeout
+        )
+        response.raise_for_status()
+        return response.json()
+
     def generate_share_link(self, task_id: str) -> Dict[str, Any]:
         """Generate a share link for an existing task."""
         response = requests.post(

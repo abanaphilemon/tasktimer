@@ -175,18 +175,42 @@ class Database:
             return []
 
         history = task.get("time_history", [])
-        # Get the most recent entries
-        history = sorted(history, key=lambda x: x.get("end_time", datetime.min) or x.get("timestamp", datetime.min), reverse=True)[:limit]
 
-        return [
-            {
-                "start_time": entry.get("start_time").isoformat() if entry.get("start_time") else None,
-                "end_time": entry.get("end_time").isoformat() if entry.get("end_time") else entry.get("timestamp"),
-                "duration": entry.get("duration", 0),
-                "status": entry.get("status", "unknown")
-            }
-            for entry in history
-        ]
+        # Handle both old format (timestamp) and new format (start_time/end_time)
+        formatted_history = []
+        for entry in history:
+            # Check if it's new format with start_time/end_time
+            if "start_time" in entry and "end_time" in entry:
+                formatted_history.append({
+                    "start_time": entry.get("start_time").isoformat() if entry.get("start_time") else None,
+                    "end_time": entry.get("end_time").isoformat() if entry.get("end_time") else None,
+                    "duration": entry.get("duration", 0),
+                    "status": entry.get("status", "unknown")
+                })
+            # Handle old format with timestamp
+            elif "timestamp" in entry:
+                formatted_history.append({
+                    "start_time": None,
+                    "end_time": entry.get("timestamp").isoformat() if entry.get("timestamp") else None,
+                    "duration": entry.get("duration", 0),
+                    "status": entry.get("status", "unknown")
+                })
+            else:
+                # Fallback
+                formatted_history.append({
+                    "start_time": None,
+                    "end_time": None,
+                    "duration": entry.get("duration", 0),
+                    "status": entry.get("status", "unknown")
+                })
+
+        # Sort by end_time (or timestamp for old format) and get most recent
+        formatted_history.sort(
+            key=lambda x: x.get("end_time") or "",
+            reverse=True
+        )
+
+        return formatted_history[:limit]
 
     # Session operations
     async def create_session(self, user_id: str, session_data: SessionCreate) -> Session:
@@ -324,6 +348,24 @@ class Database:
             }
             async for doc in cursor
         ]
+
+    async def get_task_sessions(self, task_id: str, limit: int = 50) -> List[dict]:
+        """Get completed sessions for a task."""
+        cursor = self.sessions.find({
+            "task_id": ObjectId(task_id),
+            "status": "stopped"
+        }).sort("end_time", -1).limit(limit)
+
+        sessions = []
+        async for doc in cursor:
+            sessions.append({
+                "id": str(doc["_id"]),
+                "start_time": doc.get("start_time").isoformat() if doc.get("start_time") else None,
+                "end_time": doc.get("end_time").isoformat() if doc.get("end_time") else None,
+                "duration": doc.get("duration", 0),
+                "status": doc.get("status", "unknown")
+            })
+        return sessions
 
     async def close(self):
         """Close database connection."""

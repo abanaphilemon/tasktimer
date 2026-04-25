@@ -458,15 +458,15 @@ class CloudDashboard(QWidget):
             text = f"<b>Task:</b> {task['name']}<br><br>"
             text += f"<b>Total Time:</b> {total_time_str}<br><br>"
 
-            # Get time history
-            time_history = task.get("time_history", [])
-            if time_history:
+            # Get completed sessions (new endpoint)
+            sessions = self.api.get_task_sessions(task_id)
+            if sessions:
                 text += "<b>Recent Sessions:</b><br>"
-                for entry in time_history[:5]:  # Show last 5 entries
-                    start_time = entry.get("start_time")
-                    end_time = entry.get("end_time")
-                    duration = self._format_duration(entry.get("duration", 0))
-                    status = entry.get("status", "unknown").upper()
+                for session in sessions[:5]:  # Show last 5 sessions
+                    start_time = session.get("start_time")
+                    end_time = session.get("end_time")
+                    duration = self._format_duration(session.get("duration", 0))
+                    status = session.get("status", "unknown").upper()
 
                     # Format start and end times
                     if start_time and end_time:
@@ -474,7 +474,7 @@ class CloudDashboard(QWidget):
                         end_str = self._format_datetime(end_time)
                         text += f"• {start_str} - {end_str}: {duration} ({status})<br>"
                     elif end_time:
-                        # Fallback for old format
+                        # Fallback for sessions without start time
                         time_str = self._format_datetime(end_time)
                         text += f"• {time_str}: {duration} ({status})<br>"
                     else:
