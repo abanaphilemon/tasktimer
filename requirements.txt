@@ -1,21 +1,6 @@
-# TaskTimer Dependencies
-
-# UI Framework
-PyQt5>=5.15.0
-
-# System monitoring
-psutil>=5.9.0
-
-# Input monitoring (keyboard/mouse)
-pynput>=1.7.0
-
-# Platform-specific dependencies
-# Windows:
-# pywin32>=305  # Uncomment if on Windows
-
-# Linux:
-xdotool>=3.20160805.1  # Uncomment if on Linux
-wmctrl>=1.7  # Uncomment if on Linux
-
-# macOS:
-# No additional dependencies needed (uses built-in osascript)
+PyQt5
+requests
+websockets
+pynput
+psutil
+pywin32; sys_platform == "win32"
