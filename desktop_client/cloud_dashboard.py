@@ -16,7 +16,7 @@ from PyQt5.QtGui import QFont, QColor, QPalette, QDesktopServices
 from PyQt5.QtCore import QUrl
 
 from desktop_client.api_client import TaskTimerAPIClient
-from desktop_client.cloud_tracking_engine import CloudTrackingEngine, TrackingStatus
+from desktop_client.cloud_tracking_engine import CloudTrackingEngine, TrackingStatus, NetworkStatus
 from desktop_client.login_dialog import LoginDialog
 from core.app_monitor import AppMonitor
 from ui.task_dialog import TaskDialog
@@ -130,6 +130,13 @@ class CloudDashboard(QWidget):
         self._update_status_color(TrackingStatus.STOPPED)
         right_layout.addWidget(self.status_label)
 
+        # Network status section
+        self.network_status_label = QLabel("Network: Online")
+        self.network_status_label.setFont(QFont("Arial", 10))
+        self.network_status_label.setAlignment(Qt.AlignCenter)
+        self.network_status_label.setStyleSheet("color: #006600;")
+        right_layout.addWidget(self.network_status_label)
+
         # Current task section
         self.current_task_label = QLabel("No task selected")
         self.current_task_label.setFont(QFont("Arial", 11))
@@ -203,6 +210,7 @@ class CloudDashboard(QWidget):
         self.tracker.add_status_callback(self._on_status_changed)
         self.tracker.add_time_callback(self._on_time_updated)
         self.tracker.add_app_callback(self._on_app_changed)
+        self.tracker.add_network_callback(self._on_network_changed)
 
     def _update_status_color(self, status: TrackingStatus):
         """Update status label color."""
@@ -241,6 +249,15 @@ class CloudDashboard(QWidget):
         else:
             self.start_stop_btn.setText("Stop Tracking")
 
+    def _on_network_changed(self, status: NetworkStatus):
+        """Handle network status change."""
+        if status == NetworkStatus.ONLINE:
+            self.network_status_label.setText("Network: Online")
+            self.network_status_label.setStyleSheet("color: #006600;")
+        else:
+            self.network_status_label.setText("Network: Offline (Tracking Paused)")
+            self.network_status_label.setStyleSheet("color: #990000;")
+
     def _on_time_updated(self, duration: float):
         """Handle time update."""
         self.timer_label.setText(self._format_duration(duration))
@@ -266,6 +283,12 @@ class CloudDashboard(QWidget):
         if self.tracker.is_running():
             idle_time = self.tracker.get_idle_time()
             self.idle_time_label.setText(f"Idle Time: {int(idle_time)}s")
+
+            # Show pending updates if offline
+            pending_count = self.tracker.get_pending_updates_count()
+            if pending_count > 0:
+                self.network_status_label.setText(f"Network: Offline ({pending_count} updates pending)")
+                self.network_status_label.setStyleSheet("color: #990000;")
 
             # Refresh task summary every 5 seconds
             if self._selected_task_id and int(self.tracker.get_session_duration()) % 5 == 0:

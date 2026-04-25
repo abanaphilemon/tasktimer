@@ -14,8 +14,9 @@ from datetime import datetime
 class TaskTimerAPIClient:
     """Client for TaskTimer Cloud API."""
 
-    def __init__(self, base_url: str = "https://tasktimer-rg7b.onrender.com"):
+    def __init__(self, base_url: str = "https://tasktimer-rg7b.onrender.com", timeout: float = 10.0):
         self.base_url = base_url.rstrip('/')
+        self.timeout = timeout
         self.access_token: Optional[str] = None
         self.user_id: Optional[str] = None
 
@@ -35,7 +36,8 @@ class TaskTimerAPIClient:
         """Register a new user."""
         response = requests.post(
             f"{self.base_url}/api/auth/register",
-            json={"email": email, "password": password, "name": name}
+            json={"email": email, "password": password, "name": name},
+            timeout=self.timeout
         )
         response.raise_for_status()
         data = response.json()
@@ -47,7 +49,8 @@ class TaskTimerAPIClient:
         """Login user."""
         response = requests.post(
             f"{self.base_url}/api/auth/login",
-            json={"email": email, "password": password}
+            json={"email": email, "password": password},
+            timeout=self.timeout
         )
         response.raise_for_status()
         data = response.json()
@@ -59,7 +62,8 @@ class TaskTimerAPIClient:
         """Get current user info."""
         response = requests.get(
             f"{self.base_url}/api/auth/me",
-            headers=self._get_headers()
+            headers=self._get_headers(),
+            timeout=self.timeout
         )
         response.raise_for_status()
         return response.json()
@@ -70,7 +74,8 @@ class TaskTimerAPIClient:
         response = requests.post(
             f"{self.base_url}/api/tasks",
             json={"name": name, "description": description, "allowed_apps": allowed_apps or []},
-            headers=self._get_headers()
+            headers=self._get_headers(),
+            timeout=self.timeout
         )
         response.raise_for_status()
         return response.json()
@@ -79,7 +84,8 @@ class TaskTimerAPIClient:
         """Get all tasks."""
         response = requests.get(
             f"{self.base_url}/api/tasks",
-            headers=self._get_headers()
+            headers=self._get_headers(),
+            timeout=self.timeout
         )
         response.raise_for_status()
         return response.json()
@@ -88,7 +94,8 @@ class TaskTimerAPIClient:
         """Get a specific task."""
         response = requests.get(
             f"{self.base_url}/api/tasks/{task_id}",
-            headers=self._get_headers()
+            headers=self._get_headers(),
+            timeout=self.timeout
         )
         response.raise_for_status()
         return response.json()
@@ -106,7 +113,8 @@ class TaskTimerAPIClient:
         response = requests.put(
             f"{self.base_url}/api/tasks/{task_id}",
             json=data,
-            headers=self._get_headers()
+            headers=self._get_headers(),
+            timeout=self.timeout
         )
         response.raise_for_status()
         return response.json()
@@ -115,7 +123,8 @@ class TaskTimerAPIClient:
         """Delete a task."""
         response = requests.delete(
             f"{self.base_url}/api/tasks/{task_id}",
-            headers=self._get_headers()
+            headers=self._get_headers(),
+            timeout=self.timeout
         )
         response.raise_for_status()
         return response.json()
@@ -124,7 +133,8 @@ class TaskTimerAPIClient:
         """Get app usage summary for a task."""
         response = requests.get(
             f"{self.base_url}/api/tasks/{task_id}/app-summary",
-            headers=self._get_headers()
+            headers=self._get_headers(),
+            timeout=self.timeout
         )
         response.raise_for_status()
         return response.json()
@@ -133,7 +143,8 @@ class TaskTimerAPIClient:
         """Generate a share link for an existing task."""
         response = requests.post(
             f"{self.base_url}/api/tasks/{task_id}/generate-share-link",
-            headers=self._get_headers()
+            headers=self._get_headers(),
+            timeout=self.timeout
         )
         response.raise_for_status()
         return response.json()
@@ -144,7 +155,8 @@ class TaskTimerAPIClient:
         response = requests.post(
             f"{self.base_url}/api/sessions",
             json={"task_id": task_id, "expires_hours": expires_hours},
-            headers=self._get_headers()
+            headers=self._get_headers(),
+            timeout=self.timeout
         )
         response.raise_for_status()
         return response.json()
@@ -153,7 +165,8 @@ class TaskTimerAPIClient:
         """Get all sessions."""
         response = requests.get(
             f"{self.base_url}/api/sessions",
-            headers=self._get_headers()
+            headers=self._get_headers(),
+            timeout=self.timeout
         )
         response.raise_for_status()
         return response.json()
@@ -162,7 +175,8 @@ class TaskTimerAPIClient:
         """Get a specific session."""
         response = requests.get(
             f"{self.base_url}/api/sessions/{session_id}",
-            headers=self._get_headers()
+            headers=self._get_headers(),
+            timeout=self.timeout
         )
         response.raise_for_status()
         return response.json()
@@ -171,7 +185,8 @@ class TaskTimerAPIClient:
         """Start tracking a session."""
         response = requests.post(
             f"{self.base_url}/api/sessions/{session_id}/start",
-            headers=self._get_headers()
+            headers=self._get_headers(),
+            timeout=self.timeout
         )
         response.raise_for_status()
         return response.json()
@@ -180,7 +195,8 @@ class TaskTimerAPIClient:
         """Stop tracking a session."""
         response = requests.post(
             f"{self.base_url}/api/sessions/{session_id}/stop",
-            headers=self._get_headers()
+            headers=self._get_headers(),
+            timeout=self.timeout
         )
         response.raise_for_status()
         return response.json()
@@ -190,7 +206,8 @@ class TaskTimerAPIClient:
         response = requests.post(
             f"{self.base_url}/api/sessions/{session_id}/update",
             json=data,
-            headers=self._get_headers()
+            headers=self._get_headers(),
+            timeout=self.timeout
         )
         response.raise_for_status()
         return response.json()
@@ -198,7 +215,8 @@ class TaskTimerAPIClient:
     def get_live_session(self, share_token: str) -> Dict[str, Any]:
         """Get live session data (no auth required)."""
         response = requests.get(
-            f"{self.base_url}/api/live/{share_token}"
+            f"{self.base_url}/api/live/{share_token}",
+            timeout=self.timeout
         )
         response.raise_for_status()
         return response.json()
@@ -210,7 +228,7 @@ class TaskTimerAPIClient:
     # Health check
     def health_check(self) -> Dict[str, Any]:
         """Check API health."""
-        response = requests.get(f"{self.base_url}/health")
+        response = requests.get(f"{self.base_url}/health", timeout=self.timeout)
         response.raise_for_status()
         return response.json()
 

@@ -5,6 +5,8 @@ Uses API client instead of local database.
 
 import threading
 import time
+import queue
+import requests
 from datetime import datetime
 from typing import Callable, List, Optional
 from enum import Enum
@@ -20,6 +22,12 @@ class TrackingStatus(Enum):
     ACTIVE = "active"
     IDLE = "idle"
     PAUSED = "paused"
+
+
+class NetworkStatus(Enum):
+    """Network connectivity status."""
+    ONLINE = "online"
+    OFFLINE = "offline"
 
 
 class CloudTrackingEngine:
@@ -49,8 +57,10 @@ class CloudTrackingEngine:
         self._current_session: Optional[dict] = None
         self._allowed_apps: List[str] = []
         self._status = TrackingStatus.STOPPED
+        self._network_status = NetworkStatus.ONLINE
         self._running = False
         self._thread: Optional[threading.Thread] = None
+        self._network_thread: Optional[threading.Thread] = None
         self._lock = threading.Lock()
 
         # Tracking state
@@ -59,10 +69,16 @@ class CloudTrackingEngine:
         self._current_window: Optional[ActiveWindow] = None
         self._last_sent_duration: float = 0.0  # Track last duration sent to server
 
+        # Offline mode
+        self._offline_queue: queue.Queue = queue.Queue()
+        self._pending_updates: List[dict] = []
+        self._network_check_interval: float = 5.0  # Check network every 5 seconds
+
         # Callbacks
         self._status_callbacks: List[Callable[[TrackingStatus], None]] = []
         self._time_callbacks: List[Callable[[float], None]] = []
         self._app_callbacks: List[Callable[[Optional[ActiveWindow]], None]] = []
+        self._network_callbacks: List[Callable[[NetworkStatus], None]] = []
 
         # Setup idle detector callback
         self.idle_detector.add_callback(self._on_idle_state_change)
@@ -81,6 +97,11 @@ class CloudTrackingEngine:
         """Add callback for app changes."""
         with self._lock:
             self._app_callbacks.append(callback)
+
+    def add_network_callback(self, callback: Callable[[NetworkStatus], None]):
+        """Add callback for network status changes."""
+        with self._lock:
+            self._network_callbacks.append(callback)
 
     def _notify_status(self, status: TrackingStatus):
         """Notify all status callbacks."""
@@ -106,6 +127,14 @@ class CloudTrackingEngine:
             except Exception:
                 pass
 
+    def _notify_network(self, status: NetworkStatus):
+        """Notify all network callbacks."""
+        for callback in self._network_callbacks:
+            try:
+                callback(status)
+            except Exception:
+                pass
+
     def _on_idle_state_change(self, is_idle: bool):
         """Handle idle state change from idle detector."""
         with self._lock:
@@ -123,6 +152,53 @@ class CloudTrackingEngine:
                     self._status = TrackingStatus.ACTIVE
                     self._notify_status(TrackingStatus.ACTIVE)
 
+    def _check_network(self) -> bool:
+        """Check if network is available."""
+        try:
+            response = requests.get(
+                f"{self.api.base_url}/health",
+                timeout=3.0
+            )
+            return response.status_code == 200
+        except Exception:
+            return False
+
+    def _network_monitor_loop(self):
+        """Monitor network connectivity and handle offline/online transitions."""
+        while self._running:
+            time.sleep(self._network_check_interval)
+
+            is_online = self._check_network()
+            with self._lock:
+                if is_online and self._network_status == NetworkStatus.OFFLINE:
+                    self._network_status = NetworkStatus.ONLINE
+                    self._notify_network(NetworkStatus.ONLINE)
+                    # Try to sync pending updates
+                    self._sync_pending_updates()
+                elif not is_online and self._network_status == NetworkStatus.ONLINE:
+                    self._network_status = NetworkStatus.OFFLINE
+                    self._notify_network(NetworkStatus.OFFLINE)
+                    # Don't pause tracking - just queue updates for later sync
+
+    def _sync_pending_updates(self):
+        """Sync pending updates when connection is restored."""
+        if not self._pending_updates:
+            return
+
+        updates_to_sync = self._pending_updates.copy()
+        self._pending_updates.clear()
+
+        for update in updates_to_sync:
+            try:
+                self.api.update_session(
+                    update["session_id"],
+                    update["data"]
+                )
+            except Exception:
+                # If sync fails, put back in queue
+                self._pending_updates.append(update)
+                break
+
     def _check_app_allowed(self) -> bool:
         """Check if current app is allowed."""
         window = self.app_monitor.get_active_window()
@@ -133,6 +209,13 @@ class CloudTrackingEngine:
 
         self._notify_app(window)
         return self.app_monitor.is_app_allowed(window.app_name, self._allowed_apps)
+
+    def _queue_update(self, session_id: str, data: dict):
+        """Queue an update for later sync when offline."""
+        self._pending_updates.append({
+            "session_id": session_id,
+            "data": data
+        })
 
     def _tracking_loop(self):
         """Main tracking loop."""
@@ -173,19 +256,34 @@ class CloudTrackingEngine:
                             # Calculate delta (incremental time since last update)
                             delta = self._session_duration - self._last_sent_duration
                             if delta > 0:
-                                self.api.update_session(
-                                    self._current_session["id"],
-                                    {
-                                        "duration": self._session_duration,
-                                        "delta": delta,  # Send incremental time
-                                        "status": self._status.value,
-                                        "current_app": self._current_window.app_name if self._current_window else None,
-                                        "idle_time": self.idle_detector.get_idle_time()
-                                    }
-                                )
-                                self._last_sent_duration = self._session_duration
+                                update_data = {
+                                    "duration": self._session_duration,
+                                    "delta": delta,
+                                    "status": self._status.value,
+                                    "current_app": self._current_window.app_name if self._current_window else None,
+                                    "idle_time": self.idle_detector.get_idle_time()
+                                }
+                                if self._network_status == NetworkStatus.ONLINE:
+                                    self.api.update_session(
+                                        self._current_session["id"],
+                                        update_data
+                                    )
+                                    self._last_sent_duration = self._session_duration
+                                else:
+                                    # Queue update for offline mode
+                                    self._queue_update(self._current_session["id"], update_data)
                         except Exception:
-                            pass
+                            # Network error - queue the update
+                            self._queue_update(
+                                self._current_session["id"],
+                                {
+                                    "duration": self._session_duration,
+                                    "delta": self._session_duration - self._last_sent_duration,
+                                    "status": self._status.value,
+                                    "current_app": self._current_window.app_name if self._current_window else None,
+                                    "idle_time": self.idle_detector.get_idle_time()
+                                }
+                            )
 
     def start_tracking(self, task_id: str) -> bool:
         """
@@ -220,6 +318,7 @@ class CloudTrackingEngine:
             self._last_sent_duration = 0.0
             self._last_app_check = None
             self._current_window = None
+            self._pending_updates = []
 
             # Create session
             try:
@@ -237,8 +336,12 @@ class CloudTrackingEngine:
             # Start idle detector
             self.idle_detector.start()
 
-            # Start tracking thread
+            # Start network monitor thread
             self._running = True
+            self._network_thread = threading.Thread(target=self._network_monitor_loop, daemon=True)
+            self._network_thread.start()
+
+            # Start tracking thread
             self._thread = threading.Thread(target=self._tracking_loop, daemon=True)
             self._thread.start()
 
@@ -264,10 +367,14 @@ class CloudTrackingEngine:
             # Stop idle detector
             self.idle_detector.stop()
 
-            # Wait for thread to finish
+            # Wait for threads to finish
             if self._thread:
                 self._thread.join(timeout=2)
                 self._thread = None
+
+            if self._network_thread:
+                self._network_thread.join(timeout=2)
+                self._network_thread = None
 
             # Stop session on server
             if self._current_session:
@@ -301,6 +408,7 @@ class CloudTrackingEngine:
             self._last_sent_duration = 0.0
             self._last_app_check = None
             self._current_window = None
+            self._pending_updates = []
 
             return True
 
@@ -352,6 +460,16 @@ class CloudTrackingEngine:
         """Check if tracking is currently running."""
         with self._lock:
             return self._running
+
+    def get_network_status(self) -> NetworkStatus:
+        """Get current network status."""
+        with self._lock:
+            return self._network_status
+
+    def get_pending_updates_count(self) -> int:
+        """Get count of pending updates waiting to sync."""
+        with self._lock:
+            return len(self._pending_updates)
 
     def shutdown(self):
         """Shutdown tracking engine."""
