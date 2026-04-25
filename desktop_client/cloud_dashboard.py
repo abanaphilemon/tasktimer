@@ -463,12 +463,24 @@ class CloudDashboard(QWidget):
             if time_history:
                 text += "<b>Recent Sessions:</b><br>"
                 for entry in time_history[:5]:  # Show last 5 entries
-                    timestamp = entry.get("timestamp", "")
+                    start_time = entry.get("start_time")
+                    end_time = entry.get("end_time")
                     duration = self._format_duration(entry.get("duration", 0))
                     status = entry.get("status", "unknown").upper()
-                    text += f"• {timestamp}: {duration} ({status})<br>"
+
+                    # Format start and end times
+                    if start_time and end_time:
+                        start_str = self._format_datetime(start_time)
+                        end_str = self._format_datetime(end_time)
+                        text += f"• {start_str} - {end_str}: {duration} ({status})<br>"
+                    elif end_time:
+                        # Fallback for old format
+                        time_str = self._format_datetime(end_time)
+                        text += f"• {time_str}: {duration} ({status})<br>"
+                    else:
+                        text += f"• {duration} ({status})<br>"
             else:
-                text += "No time history yet<br>"
+                text += "No sessions yet<br>"
 
             # Get app usage summary
             app_usage = self.api.get_task_app_summary(task_id)
@@ -484,6 +496,15 @@ class CloudDashboard(QWidget):
         except Exception as e:
             print(f"Error updating task summary: {e}")
             self.summary_text.setText("Error loading summary")
+
+    def _format_datetime(self, dt_str: str) -> str:
+        """Format datetime string for display."""
+        try:
+            from datetime import datetime
+            dt = datetime.fromisoformat(dt_str.replace('Z', '+00:00'))
+            return dt.strftime("%Y-%m-%d %H:%M")
+        except Exception:
+            return dt_str
 
     def _toggle_tracking(self):
         """Toggle tracking on/off."""

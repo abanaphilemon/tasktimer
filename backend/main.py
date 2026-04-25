@@ -361,16 +361,29 @@ async def stop_session(session_id: str, current_user = Depends(get_current_user)
             detail="Session not found"
         )
 
+    end_time = datetime.utcnow()
+    start_time = session.start_time or end_time
+
+    # Calculate duration if not already set
+    duration = session.duration
+    if duration == 0 and start_time:
+        duration = (end_time - start_time).total_seconds()
+
     await db.update_session(session_id, {
         "status": "stopped",
-        "end_time": datetime.utcnow()
+        "end_time": end_time,
+        "duration": duration
     })
+
+    # Record session in task history
+    if duration > 0:
+        await db.record_session(str(session.task_id), start_time, end_time, duration, "completed")
 
     # Broadcast to viewers
     await manager.broadcast_to_session(session_id, {
         "type": "session_stopped",
         "session_id": session_id,
-        "timestamp": datetime.utcnow().isoformat()
+        "timestamp": end_time.isoformat()
     })
 
     return {"message": "Session stopped"}

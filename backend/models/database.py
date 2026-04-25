@@ -129,27 +129,31 @@ class Database:
         return result.deleted_count > 0
 
     async def update_task_time(self, task_id: str, duration: float, status: str = "active") -> bool:
-        """Update task total time and add to history."""
+        """Update task total time (without adding to history)."""
         # Update total time
         result = await self.tasks.update_one(
             {"_id": ObjectId(task_id)},
             {"$inc": {"total_time": duration}}
         )
 
+        return result.modified_count > 0
+
+    async def record_session(self, task_id: str, start_time: datetime, end_time: datetime, duration: float, status: str = "completed") -> bool:
+        """Record a completed session to time history."""
         # Add to time history
-        if result.modified_count > 0:
-            await self.tasks.update_one(
-                {"_id": ObjectId(task_id)},
-                {
-                    "$push": {
-                        "time_history": {
-                            "timestamp": datetime.utcnow(),
-                            "duration": duration,
-                            "status": status
-                        }
+        result = await self.tasks.update_one(
+            {"_id": ObjectId(task_id)},
+            {
+                "$push": {
+                    "time_history": {
+                        "start_time": start_time,
+                        "end_time": end_time,
+                        "duration": duration,
+                        "status": status
                     }
                 }
-            )
+            }
+        )
 
         return result.modified_count > 0
 
@@ -172,11 +176,12 @@ class Database:
 
         history = task.get("time_history", [])
         # Get the most recent entries
-        history = sorted(history, key=lambda x: x.get("timestamp", datetime.min), reverse=True)[:limit]
+        history = sorted(history, key=lambda x: x.get("end_time", datetime.min) or x.get("timestamp", datetime.min), reverse=True)[:limit]
 
         return [
             {
-                "timestamp": entry.get("timestamp").isoformat() if entry.get("timestamp") else None,
+                "start_time": entry.get("start_time").isoformat() if entry.get("start_time") else None,
+                "end_time": entry.get("end_time").isoformat() if entry.get("end_time") else entry.get("timestamp"),
                 "duration": entry.get("duration", 0),
                 "status": entry.get("status", "unknown")
             }

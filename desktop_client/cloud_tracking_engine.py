@@ -194,6 +194,9 @@ class CloudTrackingEngine:
                     update["session_id"],
                     update["data"]
                 )
+                # Update last_sent_duration to avoid duplicate deltas
+                if "duration" in update["data"]:
+                    self._last_sent_duration = update["data"]["duration"]
             except Exception:
                 # If sync fails, put back in queue
                 self._pending_updates.append(update)
