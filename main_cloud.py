@@ -40,7 +40,7 @@ def main():
     app.setOrganizationName("TaskTimer")
 
     # Initialize API client
-    api = TaskTimerAPIClient(base_url="http://localhost:8000")
+    api = TaskTimerAPIClient(base_url="https://tasktimer-rg7b.onrender.com")
 
     # Show login dialog
     login_dialog = LoginDialog(api)

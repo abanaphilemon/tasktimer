@@ -309,7 +309,9 @@
         }
 
         function connectWebSocket() {
-            const wsUrl = `ws://${window.location.host}/ws/live/${shareToken}`;
+            //const wsUrl = `ws://${window.location.host}/ws/live/${shareToken}`;
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = `${protocol}//${window.location.host}/ws/live/${shareToken}`;
             ws = new WebSocket(wsUrl);
 
             const connectionDot = document.getElementById('connectionDot');

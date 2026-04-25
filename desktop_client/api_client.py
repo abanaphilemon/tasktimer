@@ -14,7 +14,7 @@ from datetime import datetime
 class TaskTimerAPIClient:
     """Client for TaskTimer Cloud API."""
 
-    def __init__(self, base_url: str = "http://localhost:8000"):
+    def __init__(self, base_url: str = "https://tasktimer-rg7b.onrender.com"):
         self.base_url = base_url.rstrip('/')
         self.access_token: Optional[str] = None
         self.user_id: Optional[str] = None
