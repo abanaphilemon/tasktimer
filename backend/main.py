@@ -412,25 +412,19 @@ async def update_session_data(session_id: str, data: dict, current_user = Depend
     update_dict = {}
     if "duration" in data:
         update_dict["duration"] = data["duration"]
-        # Use delta (incremental time) if provided, otherwise use duration
-        delta = data.get("delta", 0)
-        if delta > 0:
-            # Also update task total_time with incremental time
-            await db.update_task_time(task_id, delta, data.get("status", "active"))
-        else:
-            # Fallback: use duration if no delta provided
-            await db.update_task_time(task_id, data["duration"], data.get("status", "active"))
     if "status" in data:
         update_dict["status"] = data["status"]
 
     if update_dict:
         await db.update_session(session_id, update_dict)
 
-    # Log app usage if provided and status is active
+    # Log app usage and update total_time if status is active
     if "current_app" in data and data["current_app"] and data.get("status") == "active":
         # Use delta (incremental time) for accurate app usage tracking
         app_duration = data.get("delta", 5.0)
         await db.log_app_usage(session_id, task_id, data["current_app"], app_duration)
+        # Update task total_time with the delta
+        await db.update_task_time(task_id, app_duration, data.get("status", "active"))
 
     # Create event
     await db.create_event(session_id, str(current_user.id), data.get("event_type", "update"), data)

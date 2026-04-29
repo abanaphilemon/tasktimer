@@ -58,6 +58,8 @@ class TrackingEngine:
         self._session_duration: float = 0.0
         self._last_app_check: Optional[float] = None
         self._current_window: Optional[ActiveWindow] = None
+        self._app_durations: dict = {}  # Track time spent on each app
+        self._last_app_log_time: Optional[float] = None  # Track last time we logged app usage
 
         # Callbacks
         self._status_callbacks: List[Callable[[TrackingStatus], None]] = []
@@ -167,6 +169,13 @@ class TrackingEngine:
                     self._session_duration += elapsed
                     self._notify_time(self._session_duration)
 
+                    # Track time spent on current app
+                    if self._current_window:
+                        app_name = self._current_window.app_name
+                        if app_name not in self._app_durations:
+                            self._app_durations[app_name] = 0.0
+                        self._app_durations[app_name] += elapsed
+
                     # Update database periodically (every 5 seconds)
                     if int(self._session_duration) % 5 == 0 and self._current_log_id:
                         try:
@@ -174,6 +183,23 @@ class TrackingEngine:
                                 self._current_log_id,
                                 duration=self._session_duration
                             )
+                        except Exception:
+                            pass
+
+                    # Log app usage periodically (every 5 seconds)
+                    if int(self._session_duration) % 5 == 0 and self._current_window and self._current_task:
+                        try:
+                            # Log time for current app
+                            app_name = self._current_window.app_name
+                            if app_name in self._app_durations and self._app_durations[app_name] > 0:
+                                # Log the accumulated time for this app
+                                self.db.log_app_usage(
+                                    self._current_task.id,
+                                    app_name,
+                                    self._app_durations[app_name]
+                                )
+                                # Reset the counter for this app
+                                self._app_durations[app_name] = 0.0
                         except Exception:
                             pass
 
@@ -206,6 +232,8 @@ class TrackingEngine:
             self._session_duration = 0.0
             self._last_app_check = None
             self._current_window = None
+            self._app_durations = {}  # Reset app durations
+            self._last_app_log_time = None
 
             # Create time log
             log = self.db.create_time_log(task_id, status='active')
@@ -258,14 +286,16 @@ class TrackingEngine:
                 except Exception:
                     pass
 
-            # Log app usage
-            if self._current_window and self._session_duration > 0:
+            # Log remaining app usage for all apps
+            if self._app_durations and self._current_task:
                 try:
-                    self.db.log_app_usage(
-                        self._current_task.id,
-                        self._current_window.app_name,
-                        self._session_duration
-                    )
+                    for app_name, app_duration in self._app_durations.items():
+                        if app_duration > 0:
+                            self.db.log_app_usage(
+                                self._current_task.id,
+                                app_name,
+                                app_duration
+                            )
                 except Exception:
                     pass
 
