@@ -313,6 +313,8 @@ class TrackingEngine:
             self._session_duration = 0.0
             self._last_app_check = None
             self._current_window = None
+            self._app_durations = {}
+            self._last_app_log_time = None
 
             return True
 
